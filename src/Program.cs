@@ -62,7 +62,7 @@ namespace GeoConvertSSE
             {
                 var server = new Grpc.Core.Server
                 {
-                    Services = { Qlik.Sse.Connector.BindService(new BasicExampleConnector()) },
+                    Services = { Qlik.Sse.Connector.BindService(new GeoConverter()) },
                     Ports = { new ServerPort(grpcHost, grpcPort, sslCredentials) }
                 };
 

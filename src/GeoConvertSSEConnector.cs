@@ -23,7 +23,7 @@ namespace GeoConvertSSE
     /// <summary>
     /// The BasicExampleConnector inherits the generated class Qlik.Sse.Connector.ConnectorBase
     /// </summary>
-    class BasicExampleConnector : Connector.ConnectorBase
+    class GeoConverter : Connector.ConnectorBase
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -107,14 +107,23 @@ namespace GeoConvertSSE
 
         private LatitudeLongitude OS2WGS84 (double easting, double northing)
         {
-            var cartesian = GeoUK.Convert.ToCartesian(new Airy1830(),
+            try
+            {
+                var cartesian = GeoUK.Convert.ToCartesian(new Airy1830(),
                                     new BritishNationalGrid(),
                                     new EastingNorthing(
                                         easting, northing));
 
-            var wgsCartesian = Transform.Osgb36ToEtrs89(cartesian);
-            return GeoUK.Convert.ToLatitudeLongitude(new Wgs84(),
-                            wgsCartesian);
+                var wgsCartesian = Transform.Osgb36ToEtrs89(cartesian);
+                return GeoUK.Convert.ToLatitudeLongitude(new Wgs84(),
+                                wgsCartesian);
+            }
+            catch(Exception e)
+            {
+                Logger.Debug($"Error: {e}");
+                return null;
+            }
+            
         }
 
         private EastingNorthing WGS842OS(double latitude, double longitude)
@@ -196,9 +205,10 @@ namespace GeoConvertSSE
                     }
                 case (int)FunctionConstant.BNG2WGS84:
                     {
+                        bool tableDescSent = false;
+
                         while (await requestStream.MoveNext())
                         {
-
                             TableDescription tableDesc = new TableDescription();
                             tableDesc.NumberOfRows = requestStream.Current.Rows.Count;
                             tableDesc.Fields.Add(new FieldDescription { DataType = DataType.Dual, Name = "ID" });
@@ -210,7 +220,11 @@ namespace GeoConvertSSE
                                 { new Metadata.Entry("qlik-tabledescription-bin", MessageExtensions.ToByteArray(tableDesc)) }
                             };
 
-                            await context.WriteResponseHeadersAsync(tableMetadata);
+                            if (!tableDescSent)
+                            {
+                                await context.WriteResponseHeadersAsync(tableMetadata);
+                                tableDescSent = true;
+                            }
 
                             var resultBundle = new BundledRows();
 
@@ -218,11 +232,11 @@ namespace GeoConvertSSE
                             {
                                 var resultRow = new Row();
                                 var wgsLatLong = OS2WGS84(row.Duals[1].NumData, row.Duals[2].NumData);
-
                                 resultRow.Duals.Add(row.Duals[0]);
                                 resultRow.Duals.Add(new Dual { NumData = wgsLatLong.Latitude });
                                 resultRow.Duals.Add(new Dual { NumData = wgsLatLong.Longitude });
                                 resultBundle.Rows.Add(resultRow);
+                                
                             }
                             await responseStream.WriteAsync(resultBundle);
                         }
@@ -270,11 +284,10 @@ namespace GeoConvertSSE
                     }
                 case (int)FunctionConstant.WGS842BNG:
                     {
-                        Logger.Trace("WGS842BNG");
-                        Logger.Trace($"WGS842BNG {requestStream}");
+                        bool tableDescSent = false;
+
                         while (await requestStream.MoveNext())
                         {
-                            Logger.Trace($"WGS842BNG {requestStream.Current.Rows.Count}");
                             TableDescription tableDesc = new TableDescription();
                             tableDesc.NumberOfRows = requestStream.Current.Rows.Count;
                             tableDesc.Fields.Add(new FieldDescription { DataType = DataType.Dual, Name = "ID" });
@@ -286,14 +299,17 @@ namespace GeoConvertSSE
                                 { new Metadata.Entry("qlik-tabledescription-bin", MessageExtensions.ToByteArray(tableDesc)) }
                             };
 
-                            await context.WriteResponseHeadersAsync(tableMetadata);
+                            if (!tableDescSent)
+                            {
+                                await context.WriteResponseHeadersAsync(tableMetadata);
+                                tableDescSent = true;
+                            }
 
                             var resultBundle = new BundledRows();
 
                             foreach (var row in requestStream.Current.Rows)
                             {
                                 var resultRow = new Row();
-                                Logger.Trace($"Row: {row.Duals[1].NumData} {row.Duals[2].NumData}");
                                 var geo = WGS842OS(row.Duals[1].NumData, row.Duals[2].NumData);
 
                                 resultRow.Duals.Add(row.Duals[0]);
@@ -303,7 +319,6 @@ namespace GeoConvertSSE
                             }
                             await responseStream.WriteAsync(resultBundle);
                         }
-                        Logger.Trace("WGS842BNG END");
                         break;
                     }
 
