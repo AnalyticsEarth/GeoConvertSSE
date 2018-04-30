@@ -22,8 +22,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 
-src/bin/
-src/packages/
+src/bin/*
+src/packages/*
 
 # Visual Studio 2015 cache/options directory
 .vs/
